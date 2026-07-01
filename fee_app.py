@@ -18,16 +18,35 @@ def get_gspread_client():
 @st.cache_data(ttl=60)
 def load_all_data():
     client = get_gspread_client()
+    
+    # Debug: Open the sheet and check available tabs
     sh = client.open("College_Admin_Database")
+    all_tabs = [ws.title for ws in sh.worksheets()]
+    st.write("Tabs found in Google Sheet:", all_tabs)
     
-    # Load sheets
-    students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
-    installments_df = pd.DataFrame(sh.worksheet("Installment_Log").get_all_records())
-    
-    # 1. Clean column names (strip spaces and replace internal spaces with underscores)
+    # Try loading Student_Master
+    try:
+        students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
+        st.write("Student_Master rows found:", len(students_df))
+    except Exception as e:
+        st.error(f"Error loading Student_Master: {e}")
+        students_df = pd.DataFrame()
+
+    # Try loading Installment_Log
+    try:
+        data = sh.worksheet("Installment_Log").get_all_records()
+        st.write("Installment_Log rows found:", len(data))
+        installments_df = pd.DataFrame(data)
+    except Exception as e:
+        st.error(f"Error loading Installment_Log: {e}")
+        installments_df = pd.DataFrame(columns=["Student_ID", "Amount_Paid"])
+
+    # Clean headers
     for df in [students_df, installments_df]:
-        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
-        
+        if not df.empty:
+            df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+    
+    return students_df, installments_df        
     # 2. AUTO-FIX: Map common variations to the name our code expects
     column_mappings = {
         'Student_ID': 'Student_ID',
