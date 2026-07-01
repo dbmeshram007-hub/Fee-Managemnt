@@ -65,25 +65,48 @@ with tab_ops:
         is_tfws = str(student_row.get("TFWS", "No")).strip().lower() == "yes"
         st.subheader(f"TFWS Status: {'✅ Active' if is_tfws else '❌ Not Applicable'}")
         
-        col1, col2, col3 = st.columns(3)
-        fee_head = col1.selectbox("Fee Head", ["Tuition_fee", "Hostel_fee", "Practical_Record_Book", "Other"])
-        amt_to_pay = col2.number_input("Amount", min_value=0, step=100)
-        pay_date = col3.date_input("Date", datetime.date.today())
-        remarks = st.text_input("Remarks")
-        
-        if st.button("Post Payment Record", type="primary"):
-            # Update Google Sheet directly
-            client = get_gspread_client()
-            sh = client.open("College_Admin_Database")
-            ws = sh.worksheet("Installment_Log")
-            ws.append_row([str(student_id), int(amt_to_pay), str(pay_date), 1, fee_head, remarks])
+        # --- NEW PAYMENT ENTRY ---
+        with st.expander("➕ Post New Payment", expanded=True):
+            col1, col2, col3 = st.columns(3)
+            fee_head = col1.selectbox("Fee Head", ["Tuition_fee", "Hostel_fee", "Practical_Record_Book", "Other"])
+            amt_to_pay = col2.number_input("Amount", min_value=0, step=100)
+            pay_date = col3.date_input("Date", datetime.date.today())
+            remarks = st.text_input("Remarks")
             
-            st.success("Transaction saved to Google Sheet!")
-            st.rerun()
+            if st.button("Post Payment Record", type="primary"):
+                client = get_gspread_client()
+                ws = client.open("College_Admin_Database").worksheet("Installment_Log")
+                ws.append_row([str(student_id), int(amt_to_pay), str(pay_date), 1, fee_head, remarks])
+                st.success("Transaction saved!")
+                st.rerun()
+
+        # --- NEW PAYMENT HISTORY TABLE ---
+        st.subheader("📜 Payment History")
+        # Filter installments for this specific student
+        history = installments_df[installments_df["Student_ID"].astype(str) == str(student_id)]
+        
+        if not history.empty:
+            for idx, row in history.iterrows():
+                cols = st.columns([3, 2, 2, 1])
+                cols[0].write(f"{row['Date_Paid']} | {row['Fee_Head']}")
+                cols[1].write(f"₹{row['Amount_Paid']}")
+                cols[2].write(row['Remarks'])
+                
+                # DELETE BUTTON
+                if cols[3].button("🗑️", key=f"del_{idx}"):
+                    client = get_gspread_client()
+                    ws = client.open("College_Admin_Database").worksheet("Installment_Log")
+                    # +2 accounts for the header row and 0-indexing of DataFrame
+                    ws.delete_rows(idx + 2) 
+                    st.warning("Entry deleted! Refreshing...")
+                    st.rerun()
+        else:
+            st.info("No payment history found for this student.")
 
 with tab_reports:
     st.header("📊 Batch Outstanding Balance Report")
     target_year = st.selectbox("Select Year", sorted(students_df['Admission_Year'].unique(), reverse=True))
+    
     if st.button("Generate Report"):
         batch = students_df[students_df['Admission_Year'] == target_year]
         st.dataframe(batch)
