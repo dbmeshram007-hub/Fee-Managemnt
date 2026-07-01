@@ -24,21 +24,31 @@ def load_all_data():
     students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
     installments_df = pd.DataFrame(sh.worksheet("Installment_Log").get_all_records())
     
-    # Clean headers
+    # 1. Clean column names (strip spaces and replace internal spaces with underscores)
     for df in [students_df, installments_df]:
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+        
+    # 2. AUTO-FIX: Map common variations to the name our code expects
+    column_mappings = {
+        'Student_ID': 'Student_ID',
+        'Student_Id': 'Student_ID',
+        'StudentID': 'Student_ID',
+        'Student_ID_': 'Student_ID',
+        'Student_ID_ ': 'Student_ID'
+    }
+    
+    students_df.rename(columns=column_mappings, inplace=True)
+    installments_df.rename(columns=column_mappings, inplace=True)
+
+    # 3. CRITICAL CHECK: Show us if it's still missing
+    if "Student_ID" not in installments_df.columns:
+        st.error(f"Cannot find 'Student_ID' column. The columns found are: {installments_df.columns.tolist()}")
+        st.stop()
     
     students_df["Student_ID"] = students_df["Student_ID"].astype(str).str.strip()
     installments_df["Student_ID"] = installments_df["Student_ID"].astype(str).str.strip()
-    
-    # Ensure necessary columns exist (Fill with 0 if missing)
-    allotment_cols = ["Tuition_Allotted", "Hostel_Allotted", "Gymkhana_Allotted", "Travelling_Allotted"]
-    for col in allotment_cols:
-        if col not in students_df.columns:
-            students_df[col] = 0
-            
+        
     return students_df, installments_df
-
 # Load Data
 try:
     students_df, installments_df = load_all_data()
