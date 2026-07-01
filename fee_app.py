@@ -78,7 +78,7 @@ with tab_ops:
         # --- PAYMENT FORM ---
         with st.expander("➕ Post New Payment", expanded=True):
             col1, col2, col3 = st.columns(3)
-            fee_heads = ["Tuition_fee", "Hostel_fee", "Practical_Record_Book", "Journal_fee", "Other"]
+            fee_heads = ["Tuition_fee", "Hostel_fee", "Gymkhana_fee", "Journal_fee", "Other"]
             fee_head = col1.selectbox("Fee Head", fee_heads)
             
             # Hostel & TFWS Logic
