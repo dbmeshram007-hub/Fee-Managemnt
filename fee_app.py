@@ -1,54 +1,47 @@
 import streamlit as st
 import pandas as pd
 import gspread
-import json
+import datetime
 from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Pioneer Pharmacy Fee Dashboard", layout="wide")
 st.title("🎓 Fee Reconciliation & Management System")
 
-# --- 1. Robust Cloud Connection ---
+# --- 1. Cloud Connection (Using gspread) ---
 @st.cache_resource
 def get_gspread_client():
-    # Load credentials from Streamlit Secrets
-    # Ensure your Secrets contains a section [gspread] with your JSON credentials as a string
     creds_dict = dict(st.secrets["gspread_json"])
     scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
     client = gspread.authorize(creds)
     return client
 
-def load_data_from_sheet(sheet_name, worksheet_name):
+@st.cache_data(ttl=600)
+def load_all_data():
     client = get_gspread_client()
-    sh = client.open(sheet_name)
-    ws = sh.worksheet(worksheet_name)
-    data = ws.get_all_records()
-    return pd.DataFrame(data)
+    sh = client.open("College_Admin_Database")
+    
+    # Load all sheets
+    students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
+    constants_df = pd.DataFrame(sh.worksheet("Fee_Constants").get_all_records())
+    installments_df = pd.DataFrame(sh.worksheet("Installment_Log").get_all_records())
+    
+    # Cleaning headers
+    for df in [students_df, constants_df, installments_df]:
+        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+    
+    students_df["Student_ID"] = students_df["Student_ID"].astype(str).str.strip()
+    if "TFWS" not in students_df.columns:
+        students_df["TFWS"] = "No"
+        
+    return students_df, constants_df, installments_df
 
-# Usage
+# Load data
 try:
-    students_df = load_data_from_sheet("College_Admin_Database", "Student_Master")
-    constants_df = load_data_from_sheet("College_Admin_Database", "Fee_Constants")
-    installments_df = load_data_from_sheet("College_Admin_Database", "Installment_Log")
+    students_df, constants_df, installments_df = load_all_data()
 except Exception as e:
     st.error(f"Connection Error: {e}")
     st.stop()
-
-    # Cleaning headers
-    for df in [students, constants, installments]:
-        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
-    
-    students["Student_ID"] = students["Student_ID"].astype(str).str.strip()
-    if "TFWS" not in students.columns:
-        students["TFWS"] = "No"
-        
-    return students, constants, installments
-
-# Initial Load
-students_df, constants_df, installments_df = load_data()
-
-if "installments" not in st.session_state:
-    st.session_state.installments = installments_df
 
 # --- 2. Dashboard Logic ---
 tab_ops, tab_reports = st.tabs(["💼 Daily Transactions & Profiles", "📊 Batch & Year Reports"])
@@ -69,12 +62,9 @@ with tab_ops:
         student_row = students_df[students_df["Student_ID"] == student_id].iloc[0]
         
         st.header(f"👤 Account: {student_row['Name']}")
-        
-        # TFWS Logic
         is_tfws = str(student_row.get("TFWS", "No")).strip().lower() == "yes"
         st.subheader(f"TFWS Status: {'✅ Active' if is_tfws else '❌ Not Applicable'}")
         
-        # Payment Inputs
         col1, col2, col3 = st.columns(3)
         fee_head = col1.selectbox("Fee Head", ["Tuition_fee", "Hostel_fee", "Practical_Record_Book", "Other"])
         amt_to_pay = col2.number_input("Amount", min_value=0, step=100)
@@ -82,27 +72,18 @@ with tab_ops:
         remarks = st.text_input("Remarks")
         
         if st.button("Post Payment Record", type="primary"):
-            new_trx = pd.DataFrame([{
-                "Student_ID": str(student_id),
-                "Amount_Paid": int(amt_to_pay),
-                "Date_Paid": str(pay_date),
-                "Installment_Number": 1,
-                "Fee_Head": fee_head,
-                "Remarks": remarks
-            }])
+            # Update Google Sheet directly
+            client = get_gspread_client()
+            sh = client.open("College_Admin_Database")
+            ws = sh.worksheet("Installment_Log")
+            ws.append_row([str(student_id), int(amt_to_pay), str(pay_date), 1, fee_head, remarks])
             
-            # Update Local Session
-            st.session_state.installments = pd.concat([st.session_state.installments, new_trx], ignore_index=True)
-            # Update Cloud Sheet
-            conn.update(worksheet="Installment_Log", data=st.session_state.installments)
-            
-            st.success("Transaction saved to Cloud!")
+            st.success("Transaction saved to Google Sheet!")
             st.rerun()
 
 with tab_reports:
     st.header("📊 Batch Outstanding Balance Report")
     target_year = st.selectbox("Select Year", sorted(students_df['Admission_Year'].unique(), reverse=True))
-    
     if st.button("Generate Report"):
         batch = students_df[students_df['Admission_Year'] == target_year]
         st.dataframe(batch)
