@@ -6,30 +6,31 @@ import datetime
 st.set_page_config(page_title="Pioneer Pharmacy Fee Dashboard", layout="wide")
 st.title("🎓 Fee Reconciliation & Management System (Cloud)")
 
-# --- 1. Cloud Connection ---
+# --- 1. Cloud Connection (Using Published CSV URL) ---
+# NOTE: In Secrets, 'spreadsheet' must be your Published CSV Link
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 @st.cache_data(ttl=600)
 def load_data():
-    # Fetching from Google Sheets tabs
+    # Use the published CSV URLs defined in secrets
     students = conn.read(worksheet="Student_Master")
     constants = conn.read(worksheet="Fee_Constants")
     installments = conn.read(worksheet="Installment_Log")
     
-    # Cleaning headers
+    # Standardize column headers
     for df in [students, constants, installments]:
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
     
     students["Student_ID"] = students["Student_ID"].astype(str).str.strip()
     if "TFWS" not in students.columns:
         students["TFWS"] = "No"
+        
     return students, constants, installments
 
 students_df, constants_df, installments_df = load_data()
 
 if "installments" not in st.session_state:
     st.session_state.installments = installments_df
-
 # --- 2. Tabs for Workflow ---
 tab_ops, tab_reports = st.tabs(["💼 Daily Transactions & Profiles", "📊 Batch & Year Reports"])
 
