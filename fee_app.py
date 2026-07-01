@@ -21,19 +21,24 @@ def load_all_data():
     client = get_gspread_client()
     sh = client.open("College_Admin_Database")
     
-    # Load sheets
-    students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
-    installments_df = pd.DataFrame(sh.worksheet("Installment_Log").get_all_records())
+    # --- Load Students ---
+    students_data = sh.worksheet("Student_Master").get_all_records()
+    students_df = pd.DataFrame(students_data)
     
-    # Aggressive Column Cleaning
+    # --- Load Installments (Defensive Load) ---
+    ws_log = sh.worksheet("Installment_Log")
+    installments_data = ws_log.get_all_records()
+    
+    if not installments_data:
+        # Create an empty dataframe with expected columns if sheet is empty
+        installments_df = pd.DataFrame(columns=["Student_ID", "Amount_Paid", "Date_Paid", "Installment_Number", "Fee_Head", "Remarks"])
+    else:
+        installments_df = pd.DataFrame(installments_data)
+    
+    # Cleaning headers
     for df in [students_df, installments_df]:
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
     
-    # Ensure Student_ID exists
-    if "Student_ID" not in installments_df.columns:
-        st.error(f"Column 'Student_ID' missing in Installment_Log! Found: {installments_df.columns.tolist()}")
-        st.stop()
-        
     students_df["Student_ID"] = students_df["Student_ID"].astype(str).str.strip()
     installments_df["Student_ID"] = installments_df["Student_ID"].astype(str).str.strip()
     
@@ -41,7 +46,6 @@ def load_all_data():
         students_df["TFWS"] = "No"
         
     return students_df, installments_df
-
 # Load Data
 try:
     students_df, installments_df = load_all_data()
