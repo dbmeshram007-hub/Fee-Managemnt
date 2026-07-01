@@ -25,17 +25,24 @@ def load_all_data():
     students_df = pd.DataFrame(sh.worksheet("Student_Master").get_all_records())
     installments_df = pd.DataFrame(sh.worksheet("Installment_Log").get_all_records())
     
-    # Clean headers
+    # Aggressive Column Cleaning
     for df in [students_df, installments_df]:
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
     
+    # Ensure Student_ID exists
+    if "Student_ID" not in installments_df.columns:
+        st.error(f"Column 'Student_ID' missing in Installment_Log! Found: {installments_df.columns.tolist()}")
+        st.stop()
+        
     students_df["Student_ID"] = students_df["Student_ID"].astype(str).str.strip()
+    installments_df["Student_ID"] = installments_df["Student_ID"].astype(str).str.strip()
+    
     if "TFWS" not in students_df.columns:
         students_df["TFWS"] = "No"
         
     return students_df, installments_df
 
-# Run Data Load
+# Load Data
 try:
     students_df, installments_df = load_all_data()
 except Exception as e:
@@ -64,18 +71,23 @@ with tab_ops:
         is_tfws = str(student_row.get("TFWS", "No")).strip().lower() == "yes"
         st.subheader(f"Status: {'✅ TFWS Active' if is_tfws else '❌ TFWS Not Applicable'}")
         
-        # --- PAYMENT ENTRY FORM ---
+        # --- PAYMENT FORM ---
         with st.expander("➕ Post New Payment", expanded=True):
             col1, col2, col3 = st.columns(3)
             fee_heads = ["Tuition_fee", "Hostel_fee", "Practical_Record_Book", "Journal_fee", "Other"]
             fee_head = col1.selectbox("Fee Head", fee_heads)
             
-            # Hostel Logic
+            # Hostel & TFWS Logic
             room_type = "None"
             if fee_head == "Hostel_fee":
                 room_type = col2.radio("Room Type", ["Non-AC", "AC"], horizontal=True)
             
-            amt = col2.number_input("Amount", min_value=0, step=100)
+            # TFW Button
+            apply_tfw = False
+            if fee_head == "Tuition_fee" and is_tfws:
+                apply_tfw = col3.checkbox("Apply TFW (Waive Tuition Fee)", value=True)
+            
+            amt = col2.number_input("Amount", min_value=0, step=100, value=0 if apply_tfw else 1000)
             pay_date = col3.date_input("Date", datetime.date.today())
             remarks = st.text_input("Remarks", value=room_type if fee_head == "Hostel_fee" else "")
             
@@ -88,7 +100,7 @@ with tab_ops:
 
         # --- PAYMENT HISTORY ---
         st.subheader("📜 Payment History")
-        history = installments_df[installments_df["Student_ID"].astype(str) == str(student_id)]
+        history = installments_df[installments_df["Student_ID"] == str(student_id)]
         
         if not history.empty:
             for idx, row in history.iterrows():
@@ -99,9 +111,8 @@ with tab_ops:
                 if cols[3].button("🗑️", key=f"del_{idx}"):
                     client = get_gspread_client()
                     ws = client.open("College_Admin_Database").worksheet("Installment_Log")
-                    # Find row index based on the index in the original dataframe
-                    # Note: Assumes DataFrame row 0 matches Sheet row 2
-                    ws.delete_rows(installments_df.index.get_loc(idx) + 2)
+                    # Note: Row index in sheet is DataFrame Index + 2 (Header row = 1)
+                    ws.delete_rows(int(idx) + 2)
                     st.rerun()
         else:
             st.info("No records found.")
@@ -121,4 +132,5 @@ with tab_reports:
         j_df = installments_df[installments_df["Fee_Head"] == "Journal_fee"]
         st.dataframe(j_df)
         if not j_df.empty:
-            st.download_button("Download Journal Fee CSV", j_df.to_csv(index=False), "Journal_Fee.csv", "text/csv")
+            csv = j_df.to_csv(index=False).encode('utf-8')
+            st.download_button("Download Journal Fee CSV", csv, "Journal_Fee.csv", "text/csv")
