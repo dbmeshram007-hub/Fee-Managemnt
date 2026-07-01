@@ -1,21 +1,39 @@
 import streamlit as st
 import pandas as pd
-from streamlit_gsheets import GSheetsConnection
-import datetime
+import gspread
+import json
+from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Pioneer Pharmacy Fee Dashboard", layout="wide")
-st.title("🎓 Fee Reconciliation & Management System (Cloud)")
+st.title("🎓 Fee Reconciliation & Management System")
 
-# --- 1. Cloud Connection ---
-# Make sure your secrets.toml has: spreadsheet = "YOUR_GOOGLE_SHEET_URL"
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- 1. Robust Cloud Connection ---
+@st.cache_resource
+def get_gspread_client():
+    # Load credentials from Streamlit Secrets
+    # Ensure your Secrets contains a section [gspread] with your JSON credentials as a string
+    creds_dict = dict(st.secrets["gspread_json"])
+    scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    client = gspread.authorize(creds)
+    return client
 
-@st.cache_data(ttl=600)
-def load_data():
-    students = conn.read(worksheet="Student_Master")
-    constants = conn.read(worksheet="Fee_Constants")
-    installments = conn.read(worksheet="Installment_Log")
-    
+def load_data_from_sheet(sheet_name, worksheet_name):
+    client = get_gspread_client()
+    sh = client.open(sheet_name)
+    ws = sh.worksheet(worksheet_name)
+    data = ws.get_all_records()
+    return pd.DataFrame(data)
+
+# Usage
+try:
+    students_df = load_data_from_sheet("College_Admin_Database", "Student_Master")
+    constants_df = load_data_from_sheet("College_Admin_Database", "Fee_Constants")
+    installments_df = load_data_from_sheet("College_Admin_Database", "Installment_Log")
+except Exception as e:
+    st.error(f"Connection Error: {e}")
+    st.stop()
+
     # Cleaning headers
     for df in [students, constants, installments]:
         df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
