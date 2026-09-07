@@ -216,6 +216,7 @@ B. Pharm,6,Tuition_fee,Default,37500,2022
 B. Pharm,7,Tuition_fee,Default,37500,2022
 B. Pharm,8,Tuition_fee,Default,37500,2022
 B. Pharm,1,Tuition_fee,Default,45500,2026
+B. Pharm,1,College_Refundable_Deposit,Sem_1,25000,2026
 B. Pharm,2,Tuition_fee,Default,45500,2026
 B. Pharm,3,Tuition_fee,Default,45500,2026
 B. Pharm,4,Tuition_fee,Default,45500,2026
@@ -224,6 +225,7 @@ B. Pharm,6,Tuition_fee,Default,45500,2026
 B. Pharm,7,Tuition_fee,Default,45500,2026
 B. Pharm,8,Tuition_fee,Default,45500,2026
 M. Pharm,1,Tuition_fee,Govt_Quota,81000,2026
+M. Pharm,1,College_Refundable_Deposit,Sem_1,25000,2026
 M. Pharm,1,Tuition_fee,Management_Quota,68500,2026
 M. Pharm,2,Tuition_fee,Govt_Quota,81000,2026
 M. Pharm,2,Tuition_fee,Management_Quota,68500,2026
